@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>植物大战僵尸 - Phaser.js版</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #222;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            height: 600px;
+            margin: 0 auto;
+            border: 4px solid #4CAF50;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+        #game-canvas {
+            width: 100%;
+            height: 100%;
+        }
+        .loading-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #333;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 100;
+        }
+        .loading-bar {
+            width: 80%;
+            height: 30px;
+            background-color: #555;
+            border-radius: 15px;
+            margin-top: 20px;
+            overflow: hidden;
+        }
+        .loading-progress {
+            height: 100%;
+            width: 0%;
+            background-color: #4CAF50;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="game-canvas"></div>
+        <div class="loading-screen" id="loading-screen">
+            <h1>植物大战僵尸</h1>
+            <p>正在加载游戏资源...</p>
+            <div class="loading-bar">
+                <div class="loading-progress" id="loading-progress"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const config = {
+            type: Phaser.AUTO,
+            parent: 'game-canvas',
+            width: 800,
+            height: 600,
+            backgroundColor: '#4CAF50',
+            scene: [PreloadScene, MainMenuScene, GameScene, GameOverScene],
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    debug: false
+                }
+            },
+            fps: {
+                target: 60,
+                forceSetTimeOut: true
+            }
+        };
+
+        const game = new Phaser.Game(config);
+
+        // 游戏常量
+        const PLANT_TYPES = {
+            SUNFLOWER: 'sunflower',
+            PEASHOOTER: 'peashooter',
+            WALLNUT: 'wallnut',
+            SNOWPEA: 'snowpea',
+            CHERRYBOMB: 'cherrybomb'
+        };
+
+        const ZOMBIE_TYPES = {
+            NORMAL: 'normal',
+            CONEHEAD: 'conehead',
+            BUCKETHEAD: 'buckethead'
+        };
+
+        const PLANT_COSTS = {
+            [PLANT_TYPES.SUNFLOWER]: 50,
+            [PLANT_TYPES.PEASHOOTER]: 100,
+            [PLANT_TYPES.WALLNUT]: 50,
+            [PLANT_TYPES.SNOWPEA]: 175,
+            [PLANT_TYPES.CHERRYBOMB]: 150
+        };
+
+        // 预加载场景
+        class PreloadScene extends Phaser.Scene {
+            constructor() {
+                super('PreloadScene');
+            }
+
+            preload() {
+                // 显示加载进度
+                this.load.on('progress', (value) => {
+                    document.getElementById('loading-progress').style.width = `${value * 100}%`;
+                });
+
+                // 加载完成后隐藏加载界面
+                this.load.on('complete', () => {
+                    document.getElementById('loading-screen').style.display = 'none';
+                });
+
+                // 加载背景
+                this.load.image('background', 'https://img.freepik.com/free-vector/cartoon-grass-field-background_52683-60438.jpg');
+
+                // 加载植物素材
+                this.load.spritesheet('sunflower', 'https://img.freepik.com/free-vector/cute-sunflower-cartoon-vector-icon-illustration_138676-2146.jpg', { frameWidth: 64, frameHeight: 64 });
+                this.load.spritesheet('peashooter', 'https://img.freepik.com/free-vector/cute-pea-shooter-cartoon-vector-icon-illustration_138676-2147.jpg', { frameWidth: 64, frameHeight: 64 });
+                this.load.spritesheet('wallnut', 'https://img.freepik.com/free-vector/cute-wall-nut-cartoon-vector-icon-illustration_138676-2148.jpg', { frameWidth: 64, frameHeight: 64 });
+                this.load.spritesheet('snowpea', 'https://img.freepik.com/free-vector/cute-snow-pea-cartoon-vector-icon-illustration_138676-2149.jpg', { frameWidth: 64, frameHeight: 64 });
+                this.load.spritesheet('cherrybomb', 'https://img.freepik.com/free-vector/cute-cherry-bomb-cartoon-vector-icon-illustration_138676-2150.jpg', { frameWidth: 64, frameHeight: 64 });
+
+                // 加载僵尸素材
+                this.load.spritesheet('zombie', 'https://img.freepik.com/free-vector/cute-zombie-cartoon-vector-icon-illustration_138676-2151.jpg', { frameWidth: 64, frameHeight: 64 });
+                this.load.spritesheet('conehead_zombie', 'https://img.freepik.com/free-vector/cute-conehead-zombie-cartoon-vector-icon-illustration_138676-2152.jpg', { frameWidth: 64, frameHeight: 64 });
+                this.load.spritesheet('buckethead_zombie', 'https://img.freepik.com/free-vector/cute-buckethead-zombie-cartoon-vector-icon-illustration_138676-2153.jpg', { frameWidth: 64, frameHeight: 64 });
+
+                // 加载其他素材
+                this.load.image('sun', 'https://img.freepik.com/free-vector/cute-sun-cartoon-vector-icon-illustration_138676-2154.jpg');
+                this.load.image('pea', 'https://img.freepik.com/free-vector/cute-pea-cartoon-vector-icon-illustration_138676-2155.jpg');
+                this.load.image('icepea', 'https://img.freepik.com/free-vector/cute-ice-pea-cartoon-vector-icon-illustration_138676-2156.jpg');
+                this.load.image('explosion', 'https://img.freepik.com/free-vector/cute-explosion-cartoon-vector-icon-illustration_138676-2157.jpg');
+
+                // 加载UI素材
+                this.load.image('card_sunflower', 'https://img.freepik.com/free-vector/cute-sunflower-card-cartoon-vector-icon-illustration_138676-2158.jpg');
+                this.load.image('card_peashooter', 'https://img.freepik.com/free-vector/cute-peashooter-card-cartoon-vector-icon-illustration_138676-2159.jpg');
+                this.load.image('card_wallnut', 'https://img.freepik.com/free-vector/cute-wallnut-card-cartoon-vector-icon-illustration_138676-2160.jpg');
+                this.load.image('card_snowpea', 'https://img.freepik.com/free-vector/cute-snowpea-card-cartoon-vector-icon-illustration_138676-2161.jpg');
+                this.load.image('card_cherrybomb', 'https://img.freepik.com/free-vector/cute-cherrybomb-card-cartoon-vector-icon-illustration_138676-2162.jpg');
+            }
+
+            create() {
+                // 创建动画
+                this.createAnimations();
+                
+                // 跳转到主菜单场景
+                this.scene.start('MainMenuScene');
+            }
+
+            createAnimations() {
+                // 向日葵动画
+                this.anims.create({
+                    key: 'sunflower_idle',
+                    frames: this.anims.generateFrameNumbers('sunflower', { start: 0, end: 2 }),
+                    frameRate: 5,
+                    repeat: -1
+                });
+
+                // 豌豆射手动画
+                this.anims.create({
+                    key: 'peashooter_idle',
+                    frames: this.anims.generateFrameNumbers('peashooter', { start: 0, end: 2 }),
+                    frameRate: 5,
+                    repeat: -1
+                });
+
+                // 坚果动画
+                this.anims.create({
+                    key: 'wallnut_idle',
+                    frames: this.anims.generateFrameNumbers('wallnut', { start: 0, end: 2 }),
+                    frameRate: 5,
+                    repeat: -1
+                });
+
+                // 寒冰射手动画
+                this.anims.create({
+                    key: 'snowpea_idle',
+                    frames: this.anims.generateFrameNumbers('snowpea', { start: 0, end: 2 }),
+                    frameRate: 5,
+                    repeat: -1
+                });
+
+                // 樱桃炸弹动画
+                this.anims.create({
+                    key: 'cherrybomb_idle',
+                    frames: this.anims.generateFrameNumbers('cherrybomb', { start: 0, end: 2 }),
+                    frameRate: 5,
+                    repeat: -1
+                });
+
+                // 普通僵尸动画
+                this.anims.create({
+                    key: 'zombie_walk',
+                    frames: this.anims.generateFrameNumbers('zombie', { start: 0, end: 1 }),
+                    frameRate: 3,
+                    repeat: -1
+                });
+
+                // 路障僵尸动画
+                this.anims.create({
+                    key: 'conehead_walk',
+                    frames: this.anims.generateFrameNumbers('conehead_zombie', { start: 0, end: 1 }),
+                    frameRate: 3,
+                    repeat: -1
+                });
+
+                // 铁桶僵尸动画
+                this.anims.create({
+                    key: 'buckethead_walk',
+                    frames: this.anims.generateFrameNumbers('buckethead_zombie', { start: 0, end: 1 }),
+                    frameRate: 3,
+                    repeat: -1
+                });
+            }
+        }
+
+        // 主菜单场景
+        class MainMenuScene extends Phaser.Scene {
+            constructor() {
+                super('MainMenuScene');
+            }
+
+            create() {
+                // 添加背景
+                this.add.image(400, 300, 'background').setDisplaySize(800, 600);
+
+                // 添加标题
+                const title = this.add.text(400, 150, '植物大战僵尸', {
+                    fontSize: '64px',
+                    fontFamily: 'Arial',
+                    color: '#FFD700',
+                    stroke: '#000',
+                    strokeThickness: 6,
+                    shadow: {
+                        offsetX: 3,
+                        offsetY: 3,
+                        color: '#000',
+                        blur: 5,
+                        stroke: true
+                    }
+                }).setOrigin(0.5);
+
+                // 添加开始按钮
+                const startButton = this.add.rectangle(400, 350, 200, 60, 0x4CAF50)
+                    .setInteractive()
+                    .setStrokeStyle(4, 0xFFFFFF);
+                
+                const startText = this.add.text(400, 350, '开始游戏', {
+                    fontSize: '24px',
+                    color: '#FFFFFF'
+                }).setOrigin(0.5);
+
+                // 按钮交互效果
+                startButton.on('pointerover', () => {
+                    startButton.setFillStyle(0x45a049);
+                });
+
+                startButton.on('pointerout', () => {
+                    startButton.setFillStyle(0x4CAF50);
+                });
+
+                startButton.on('pointerdown', () => {
+                    this.scene.start('GameScene');
+                });
+            }
+        }
+
+        // 游戏场景
+        class GameScene extends Phaser.Scene {
+            constructor() {
+                super('GameScene');
+                this.sunCount = 50;
+                this.selectedPlant = null;
+                this.plants = [];
+                this.zombies = [];
+                this.projectiles = [];
+                this.lawnGrid = [];
+                this.sunInterval = null;
+                this.zombieInterval = null;
+            }
+
+            create() {
+                // 创建草坪网格
+                this.createLawnGrid();
+
+                // 添加背景
+                this.add.image(400, 300, 'background').setDisplaySize(800, 600);
+
+                // 添加阳光计数器
+                this.sunText = this.add.text(50, 20, `阳光: ${this.sunCount}`, {
+                    fontSize: '24px',
+                    color: '#000000',
+                    backgroundColor: '#FFFFFF',
+                    padding: { x: 10, y: 5 }
+                }).setOrigin(0, 0.5);
+
+                // 添加植物卡片
+                this.createPlantCards();
+
+                // 添加草坪网格
+                this.drawLawnGrid();
+
+                // 自动生成阳光
+                this.sunInterval = this.time.addEvent({
+                    delay: 5000,
+                    callback: this.generateSun,
+                    callbackScope: this,
+                    loop: true
+                });
+
+                // 生成僵尸
+                this.zombieInterval = this.time.addEvent({
+                    delay: 10000,
+                    callback: this.spawnZombie,
+                    callbackScope: this,
+                    loop: true
+                });
+
+                // 初始阳光
+                this.generateSun();
+                this.generateSun();
+                this.generateSun();
+            }
+
+            createLawnGrid() {
+                const rows = 5;
+                const cols = 9;
+                const cellWidth = 80;
+                const cellHeight = 100;
+                const startX = 50;
+                const startY = 100;
+
+                for (let row = 0; row < rows; row++) {
+                    this.lawnGrid[row] = [];
+                    for (let col = 0; col < cols; col++) {
+                        this.lawnGrid[row][col] = {
+                            x: startX + col * cellWidth,
+                            y: startY + row * cellHeight,
+                            width: cellWidth,
+                            height: cellHeight,
+                            plant: null,
+                            occupied: false
+                        };
+                    }
+                }
+            }
+
+            drawLawnGrid() {
+                const graphics = this.add.graphics();
+                graphics.lineStyle(2, 0xFFFFFF, 0.5);
+
+                for (let row = 0; row < this.lawnGrid.length; row++) {
+                    for (let col = 0; col < this.lawnGrid[row].length; col++) {
+                        const cell = this.lawnGrid[row][col];
+                        graphics.strokeRect(cell.x, cell.y, cell.width, cell.height);
+
+                        // 添加点击事件
+                        const zone = this.add.zone(cell.x, cell.y, cell.width, cell.height)
+                            .setOrigin(0)
+                            .setInteractive();
+
+                        zone.on('pointerdown', () => {
+                            if (this.selectedPlant && !cell.occupied && this.sunCount >= PLANT_COSTS[this.selectedPlant]) {
+                                this.placePlant(this.selectedPlant, row, col);
+                            }
+                        });
+                    }
+                }
+            }
+
+            createPlantCards() {
+                const cardWidth = 70;
+                const cardHeight = 90;
+                const startX = 50;
+                const startY = 500;
+                const padding = 10;
+
+                const plants = [
+                    { type: PLANT_TYPES.SUNFLOWER, texture: 'card_sunflower' },
+                    { type: PLANT_TYPES.PEASHOOTER, texture: 'card_peashooter' },
+                    { type: PLANT_TYPES.WALLNUT, texture: 'card_wallnut' },
+                    { type: PLANT_TYPES.SNOWPEA, texture: 'card_snowpea' },
+                    { type: PLANT_TYPES.CHERRYBOMB, texture: 'card_cherrybomb' }
+                ];
+
+                plants.forEach((plant, index) => {
+                    const x = startX + index * (cardWidth + padding);
+                    const y = startY;
+
+                    // 卡片背景
+                    const card = this.add.rectangle(x, y, cardWidth, cardHeight, 0x4CAF50)
+                        .setStrokeStyle(2, 0xFFFFFF)
+                        .setInteractive()
+                        .on('pointerdown', () => {
+                            this.selectedPlant = plant.type;
+                            // 高亮选中的卡片
+                            this.cards.forEach(c => c.setStrokeStyle(2, 0xFFFFFF));
+                            card.setStrokeStyle(4, 0xFFD700);
+                        });
+
+                    // 植物图标
+                    this.add.image(x, y - 15, plant.texture).setDisplaySize(50, 50);
+
+                    // 阳光消耗
+                    this.add.text(x, y + 25, PLANT_COSTS[plant.type], {
+                        fontSize: '18px',
+                        color: '#FFD700',
+                        backgroundColor: '#000000',
+                        padding: { x: 5, y: 2 }
+                    }).setOrigin(0.5);
+
+                    if (!this.cards) this.cards = [];
+                    this.cards.push(card);
+                });
+            }
+
+            placePlant(plantType, row, col) {
+                const cell = this.lawnGrid[row][col];
+                if (cell.occupied) return;
+
+                this.sunCount -= PLANT_COSTS[plantType];
+                this.sunText.setText(`阳光: ${this.sunCount}`);
+
+                let plant;
+                switch (plantType) {
+                    case PLANT_TYPES.SUNFLOWER:
+                        plant = new Sunflower(this, cell.x + cell.width / 2, cell.y + cell.height / 2, row, col);
+                        break;
+                    case PLANT_TYPES.PEASHOOTER:
+                        plant = new Peashooter(this, cell.x + cell.width / 2, cell.y + cell.height / 2, row, col);
+                        break;
+                    case PLANT_TYPES.WALLNUT:
+                        plant = new Wallnut(this, cell.x + cell.width / 2, cell.y + cell.height / 2, row, col);
+                        break;
+                    case PLANT_TYPES.SNOWPEA:
+                        plant = new Snowpea(this, cell.x + cell.width / 2, cell.y + cell.height / 2, row, col);
+                        break;
+                    case PLANT_TYPES.CHERRYBOMB:
+                        plant = new Cherrybomb(this, cell.x + cell.width / 2, cell.y + cell.height / 2, row, col);
+                        break;
+                }
+
+                cell.plant = plant;
+                cell.occupied = true;
+                this.plants.push(plant);
+            }
+
+            generateSun() {
+                const sun = new Sun(this, Phaser.Math.Between(100, 700), 0);
+                this.sun = sun;
+            }
+
+            spawnZombie() {
+                const row = Phaser.Math.Between(0, 4);
+                const zombieType = Phaser.Math.RND.pick([ZOMBIE_TYPES.NORMAL, ZOMBIE_TYPES.CONEHEAD, ZOMBIE_TYPES.BUCKETHEAD]);
+                
+                let zombie;
+                switch (zombieType) {
+                    case ZOMBIE_TYPES.NORMAL:
+                        zombie = new NormalZombie(this, 800, this.lawnGrid[row][0].y + 50, row);
+                        break;
+                    case ZOMBIE_TYPES.CONEHEAD:
+                        zombie = new ConeheadZombie(this, 800, this.lawnGrid[row][0].y + 50, row);
+                        break;
+                    case ZOMBIE_TYPES.BUCKETHEAD:
+                        zombie = new BucketheadZombie(this, 800, this.lawnGrid[row][0].y + 50, row);
+                        break;
+                }
+
+                this.zombies.push(zombie);
+            }
+
+            update() {
+                // 更新所有植物
+                this.plants.forEach(plant => {
+                    if (plant.update) plant.update();
+                });
+
+                // 更新所有僵尸
+                this.zombies.forEach(zombie => {
+                    if (zombie.update) zombie.update();
+                });
+
+                // 更新所有子弹
+                this.projectiles.forEach(projectile => {
+                    if (projectile.update) projectile.update();
+                });
+
+                // 检测僵尸是否到达终点
+                this.zombies.forEach(zombie => {
+                    if (zombie.x < 0) {
+                        this.scene.start('GameOverScene');
+                    }
+                });
+            }
+        }
+
+        // 游戏结束场景
+        class GameOverScene extends Phaser.Scene {
+            constructor() {
+                super('GameOverScene');
+            }
+
+            create() {
+                // 添加背景
+                this.add.rectangle(400, 300, 800, 600, 0x000000, 0.7);
+
+                // 添加游戏结束文本
+                this.add.text(400, 200, '游戏结束', {
+                    fontSize: '64px',
+                    color: '#FF0000',
+                    stroke: '#FFFFFF',
+                    strokeThickness: 6
+                }).setOrigin(0.5);
+
+                // 添加重新开始按钮
+                const restartButton = this.add.rectangle(400, 350, 200, 60, 0x4CAF50)
+                    .setInteractive()
+                    .setStrokeStyle(4, 0xFFFFFF);
+                
+                const restartText = this.add.text(400, 350, '重新开始', {
+                    fontSize: '24px',
+                    color: '#FFFFFF'
+                }).setOrigin(0.5);
+
+                // 按钮交互效果
+                restartButton.on('pointerover', () => {
+                    restartButton.setFillStyle(0x45a049);
+                });
+
+                restartButton.on('pointerout', () => {
+                    restartButton.setFillStyle(0x4CAF50);
+                });
+
+                restartButton.on('pointerdown', () => {
+                    this.scene.start('GameScene');
+                });
+            }
+        }
+
+        // 阳光类
+        class Sun {
+            constructor(scene, x, y) {
+                this.scene = scene;
+                this.x = x;
+                this.y = y;
+                
+                this.sprite = scene.add.image(x, y, 'sun')
+                    .setDisplaySize(40, 40)
+                    .setInteractive()
+                    .on('pointerdown', () => this.collect());
+                
+                // 下落动画
+                scene.tweens.add({
+                    targets: this.sprite,
+                    y: Phaser.Math.Between(100, 400),
+                    duration: 1000,
+                    ease: 'Bounce.easeOut'
+                });
+            }
+
+            collect() {
+                this.scene.sunCount += 25;
+                this.scene.sunText.setText(`阳光: ${this.scene.sunCount}`);
+                this.sprite.destroy();
+            }
+        }
+
+        // 植物基类
+        class Plant {
+            constructor(scene, x, y, row, col, texture, animKey) {
+                this.scene = scene;
+                this.x = x;
+                this.y = y;
+                this.row = row;
+                this.col = col;
+                
+                this.sprite = scene.add.sprite(x, y, texture)
+                    .play(animKey)
+                    .setDisplaySize(60, 60);
+            }
+        }
+
+        // 向日葵类
+        class Sunflower extends Plant {
+            constructor(scene, x, y, row, col) {
+                super(scene, x, y, row, col, 'sunflower', 'sunflower_idle');
+                
+                // 定时生成阳光
+                this.sunTimer = scene.time.addEvent({
+                    delay: 10000,
+                    callback: this.generateSun,
+                    callbackScope: this,
+                    loop: true
+                });
+            }
+
+            generateSun() {
+                new Sun(this.scene, this.x, this.y);
+            }
+        }
+
+        // 豌豆射手类
+        class Peashooter extends Plant {
+            constructor(scene, x, y, row, col) {
+                super(scene, x, y, row, col, 'peashooter', 'peashooter_idle');
+                
+                // 定时发射豌豆
+                this.shootTimer = scene.time.addEvent({
+                    delay: 2000,
+                    callback: this.shoot,
+                    callbackScope: this,
+                    loop: true
+                });
+            }
+
+            shoot() {
+                const pea = new Pea(this.scene, this.x + 30, this.y, this.row);
+                this.scene.projectiles.push(pea);
+            }
+        }
+
+        // 坚果类
+        class Wallnut extends Plant {
+            constructor(scene, x, y, row, col) {
+                super(scene, x, y, row, col, 'wallnut', 'wallnut_idle');
+                this.health = 100;
+            }
+        }
+
+        // 寒冰射手类
+        class Snowpea extends Plant {
+            constructor(scene, x, y, row, col) {
+                super(scene, x, y, row, col, 'snowpea', 'snowpea_idle');
+                
+                // 定时发射冰豌豆
+                this.shootTimer = scene.time.addEvent({
+                    delay: 2500,
+                    callback: this.shoot,
+                    callbackScope: this,
+                    loop: true
+                });
+            }
+
+            shoot() {
+                const icePea = new IcePea(this.scene, this.x + 30, this.y, this.row);
+                this.scene.projectiles.push(icePea);
+            }
+        }
+
+        // 樱桃炸弹类
+        class Cherrybomb extends Plant {
+            constructor(scene, x, y, row, col) {
+                super(scene, x, y, row, col, 'cherrybomb', 'cherrybomb_idle');
+                
+                // 3秒后爆炸
+                scene.time.delayedCall(3000, this.explode, [], this);
+            }
+
+            explode() {
+                // 创建爆炸效果
+                const explosion = this.scene.add.image(this.x, this.y, 'explosion')
+                    .setDisplaySize(120, 120);
+                
+                // 爆炸动画
+                this.scene.tweens.add({
+                    targets: explosion,
+                    scale: 2,
+                    alpha: 0,
+                    duration: 500,
+                    onComplete: () => explosion.destroy()
+                });
+
+                // 伤害范围内的僵尸
+                this.scene.zombies.forEach(zombie => {
+                    if (Phaser.Math.Distance.Between(this.x, this.y, zombie.x, zombie.y) < 100) {
+                        zombie.takeDamage(100);
+                    }
+                });
+
+                // 移除植物
+                this.scene.lawnGrid[this.row][this.col].occupied = false;
+                this.scene.lawnGrid[this.row][this.col].plant = null;
+                this.sprite.destroy();
+            }
+        }
+
+        // 豌豆类
+        class Pea {
+            constructor(scene, x, y, row) {
+                this.scene = scene;
+                this.x = x;
+                this.y = y;
+                this.row = row;
+                this.damage = 20;
+                
+                this.sprite = scene.add.image(x, y, 'pea')
+                    .setDisplaySize(20, 20);
+                
+                // 移动动画
+                scene.tweens.add({
+                    targets: this.sprite,
+                    x: 900,
+                    duration: 2000,
+                    onComplete: () => this.destroy()
+                });
+            }
+
+            update() {
+                // 检测碰撞
+                this.scene.zombies.forEach(zombie => {
+                    if (zombie.row === this.row && 
+                        Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, zombie.x, zombie.y) < 30) {
+                        zombie.takeDamage(this.damage);
+                        this.destroy();
+                    }
+                });
+            }
+
+            destroy() {
+                this.sprite.destroy();
+                const index = this.scene.projectiles.indexOf(this);
+                if (index !== -1) {
+                    this.scene.projectiles.splice(index, 1);
+                }
+            }
+        }
+
+        // 冰豌豆类
+        class IcePea extends Pea {
+            constructor(scene, x, y, row) {
+                super(scene, x, y, row);
+                this.sprite.setTexture('icepea');
+                this.damage = 15;
+            }
+
+            update() {
+                super.update();
+                
+                // 冰豌豆有减速效果
+                this.scene.zombies.forEach(zombie => {
+                    if (zombie.row === this.row && 
+                        Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, zombie.x, zombie.y) < 30) {
+                        zombie.slowDown(3000); // 减速3秒
+                    }
+                });
+            }
+        }
+
+        // 僵尸基类
+        class Zombie {
+            constructor(scene, x, y, row, texture, animKey, health) {
+                this.scene = scene;
+                this.x = x;
+                this.y = y;
+                this.row = row;
+                this.health = health;
+                this.maxHealth = health;
+                this.speed = 0.5;
+                this.normalSpeed = this.speed;
+                this.slowed = false;
+                
+                this.sprite = scene.add.sprite(x, y, texture)
+                    .play(animKey)
+                    .setDisplaySize(60, 80)
+                    .setFlipX(true);
+                
+                // 血条背景
+                this.healthBarBg = scene.add.rectangle(x, y - 40, 50, 5, 0xFF0000)
+                    .setOrigin(0.5);
+                
+                // 血条
+                this.healthBar = scene.add.rectangle(x - 25, y - 40, 50, 5, 0x00FF00)
+                    .setOrigin(0, 0.5);
+            }
+
+            update() {
+                // 移动
+                this.x -= this.speed;
+                this.sprite.x = this.x;
+                this.healthBarBg.x = this.x;
+                this.healthBar.x = this.x - 25;
+                
+                // 更新血条
+                const healthPercent = this.health / this.maxHealth;
+                this.healthBar.scaleX = healthPercent;
+                
+                // 检测是否攻击植物
+                const cellCol = Math.floor((this.x - 50) / 80);
+                if (cellCol >= 0 && cellCol < 9) {
+                    const cell = this.scene.lawnGrid[this.row][cellCol];
+                    if (cell.occupied) {
+                        this.speed = 0;
+                        // 攻击植物
+                        if (!this.attackTimer) {
+                            this.attackTimer = this.scene.time.addEvent({
+                                delay: 1000,
+                                callback: () => {
+                                    if (cell.plant && cell.plant.takeDamage) {
+                                        cell.plant.takeDamage(10);
+                                    }
+                                },
+                                callbackScope: this,
+                                loop: true
+                            });
+                        }
+                    } else {
+                        this.speed = this.slowed ? this.normalSpeed * 0.5 : this.normalSpeed;
+                        if (this.attackTimer) {
+                            this.attackTimer.destroy();
+                            this.attackTimer = null;
+                        }
+                    }
+                }
+            }
+
+            takeDamage(amount) {
+                this.health -= amount;
+                if (this.health <= 0) {
+                    this.destroy();
+                }
+            }
+
+            slowDown(duration) {
+                if (this.slowed) return;
+                
+                this.slowed = true;
+                this.speed = this.normalSpeed * 0.5;
+                this.sprite.setTint(0xADD8E6); // 蓝色表示减速
+                
+                this.scene.time.delayedCall(duration, () => {
+                    this.slowed = false;
+                    this.speed = this.normalSpeed;
+                    this.sprite.clearTint();
+                }, [], this);
+            }
+
+            destroy() {
+                this.sprite.destroy();
+                this.healthBar.destroy();
+                this.healthBarBg.destroy();
+                
+                if (this.attackTimer) {
+                    this.attackTimer.destroy();
+                }
+                
+                const index = this.scene.zombies.indexOf(this);
+                if (index !== -1) {
+                    this.scene.zombies.splice(index, 1);
+                }
+            }
+        }
+
+        // 普通僵尸类
+        class NormalZombie extends Zombie {
+            constructor(scene, x, y, row) {
+                super(scene, x, y, row, 'zombie', 'zombie_walk', 100);
+            }
+        }
+
+        // 路障僵尸类
+        class ConeheadZombie extends Zombie {
+            constructor(scene, x, y, row) {
+                super(scene, x, y, row, 'conehead_zombie', 'conehead_walk', 200);
+            }
+        }
+
+        // 铁桶僵尸类
+        class BucketheadZombie extends Zombie {
+            constructor(scene, x, y, row) {
+                super(scene, x, y, row, 'buckethead_zombie', 'buckethead_walk', 300);
+            }
+        }
+    </script>
+</body>
+</html>
